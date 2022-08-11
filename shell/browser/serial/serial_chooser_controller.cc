@@ -114,6 +114,18 @@ void SerialChooserController::OnPortRemoved(
   }
 }
 
+void SerialChooserController::OnPermissionRevoked(const url::Origin& origin) {
+  api::Session* session = GetSession();
+  if (session) {
+    v8::Isolate* isolate = JavascriptEnvironment::GetIsolate();
+    v8::HandleScope scope(isolate);
+    gin_helper::Dictionary details =
+        gin_helper::Dictionary::CreateEmpty(isolate);
+    details.Set("origin", origin.Serialize());
+    session->Emit("serial-port-revoked", details);
+  }
+}
+
 void SerialChooserController::OnPortManagerConnectionError() {
   observation_.Reset();
 }
