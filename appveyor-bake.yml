@@ -1,11 +1,5 @@
 # The config is used to bake appveyor images, not for running CI jobs.
 # The config expects the following environment variables to be set:
-#  - "GN_CONFIG" Build type. One of {'testing', 'release'}.
-#  - "GN_EXTRA_ARGS" Additional gn arguments for a build config,
-#      e.g. 'target_cpu="x86"' to build for a 32bit platform.
-#      https://gn.googlesource.com/gn/+/master/docs/reference.md#target_cpu
-#      Don't forget to set up "NPM_CONFIG_ARCH" and "TARGET_ARCH" accordningly
-#      if you pass a custom value for 'target_cpu'.
 #  - "APPVEYOR_BAKE_IMAGE" e.g. 'electron-99.0.4767.0'. Name of the image to be baked.
 #      Typically named after the Chromium version on which the image is built.
 #      This can be set dynamically in the prepare-appveyor script.
@@ -23,7 +17,6 @@ environment:
   DEPOT_TOOLS_WIN_TOOLCHAIN: 0
   PYTHONIOENCODING: UTF-8
 build_script:
-  - ps: echo "Building $env:GN_CONFIG build"
   - git config --global core.longpaths true
   - cd ..
   - mkdir src
@@ -37,27 +30,6 @@ build_script:
         $env:GOMA_OAUTH2_CONFIG_FILE = "$pwd\.goma_oauth2_config"
         $env:RAW_GOMA_AUTH | Set-Content $env:GOMA_OAUTH2_CONFIG_FILE
       }
-  - git clone https://github.com/electron/build-tools.git
-  - cd build-tools
-  - npm install
-  - mkdir third_party
-  - ps: >-
-      node -e "require('./src/utils/goma.js').downloadAndPrepare({ gomaOneForAll: true })"
-  - ps: $env:GN_GOMA_FILE = node -e "console.log(require('./src/utils/goma.js').gnFilePath)"
-  - ps: $env:LOCAL_GOMA_DIR = node -e "console.log(require('./src/utils/goma.js').dir)"
-  - cd ..
-  - ps: .\src\electron\script\start-goma.ps1 -gomaDir $env:LOCAL_GOMA_DIR
-  - ps: >-
-      if (Test-Path 'env:RAW_GOMA_AUTH') {
-        $goma_login = python $env:LOCAL_GOMA_DIR\goma_auth.py info
-        if ($goma_login -eq 'Login as Fermi Planck') {
-          Write-warning "Goma authentication is correct";
-        } else {
-          Write-warning "WARNING!!!!!! Goma authentication is incorrect; please update Goma auth token.";
-          $host.SetShouldExit(1)
-        }
-      }
-  - ps: $env:CHROMIUM_BUILDTOOLS_PATH="$pwd\src\buildtools"
   - ps: >-
       $env:NINJA_STATUS="[%r processes, %f/%t @ %o/s : %es] "
   - >-
