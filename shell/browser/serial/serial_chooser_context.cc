@@ -123,7 +123,7 @@ bool SerialChooserContext::HasPortPermission(
     content::RenderFrameHost* render_frame_host) {
   auto it = ephemeral_ports_.find(origin);
   if (it != ephemeral_ports_.end()) {
-    const std::set<base::UnguessableToken> ports = it->second;
+    const std::set<base::UnguessableToken>& ports = it->second;
     if (base::Contains(ports, port.token))
       return true;
   }
@@ -233,18 +233,13 @@ void SerialChooserContext::OnPortRemoved(
   for (auto& observer : port_observer_list_)
     observer.OnPortRemoved(*port);
 
-  std::vector<url::Origin> revoked_origins;
-  for (auto& map_entry : ephemeral_ports_) {
-    std::set<base::UnguessableToken>& ports = map_entry.second;
-    if (ports.erase(port->token) > 0) {
-      revoked_origins.push_back(map_entry.first);
-    }
-  }
+  // Revoke the ephemeral ports, but keep the keys here to notify observers.
+  decltype(ephemeral_ports_) revoked_ports;
+  std::swap(ephemeral_ports_, revoked_ports);
 
-  port_info_.erase(port->token);
-
+  // Notify observers that all ephemeral permissions have been revoked.
   for (auto& observer : port_observer_list_) {
-    for (const auto& origin : revoked_origins) {
+    for (const auto& [origin, ports] : revoked_ports) {
       observer.OnPermissionRevoked(origin);
     }
   }
@@ -297,5 +292,4 @@ void SerialChooserContext::OnPortManagerConnectionError() {
       observer.OnPermissionRevoked(origin);
   }
 }
-
 }  // namespace electron
