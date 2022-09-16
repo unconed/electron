@@ -386,13 +386,6 @@ base::IDMap<WebContents*>& GetAllWebContents() {
   return *s_all_web_contents;
 }
 
-// Called when CapturePage is done.
-void OnCapturePageDone(gin_helper::Promise<gfx::Image> promise,
-                       const SkBitmap& bitmap) {
-  // Hack to enable transparency in captured image
-  promise.Resolve(gfx::Image::CreateFrom1xBitmap(bitmap));
-}
-
 absl::optional<base::TimeDelta> GetCursorBlinkInterval() {
 #if BUILDFLAG(IS_MAC)
   absl::optional<base::TimeDelta> system_value(
@@ -3134,6 +3127,17 @@ void WebContents::StartDrag(const gin_helper::Dictionary& item,
   }
 }
 
+void WebContents::OnCapturePageDone(gin_helper::Promise<gfx::Image> promise,
+                                    const SkBitmap& bitmap) {
+  // Hack to enable transparency in captured image
+  promise.Resolve(gfx::Image::CreateFrom1xBitmap(bitmap));
+  if (!capture_handles_.empty()) {
+    base::ScopedClosureRunner handle = std::move(capture_handles_.front());
+    capture_handles_.pop();
+    handle.RunAndReset();
+  }
+}
+
 v8::Local<v8::Promise> WebContents::CapturePage(gin::Arguments* args) {
   gfx::Rect rect;
   gin_helper::Promise<gfx::Image> promise(args->isolate());
@@ -3175,8 +3179,10 @@ v8::Local<v8::Promise> WebContents::CapturePage(gin::Arguments* args) {
   if (scale > 1.0f)
     bitmap_size = gfx::ScaleToCeiledSize(view_size, scale);
 
-  view->CopyFromSurface(gfx::Rect(rect.origin(), view_size), bitmap_size,
-                        base::BindOnce(&OnCapturePageDone, std::move(promise)));
+  view->CopyFromSurface(
+      gfx::Rect(rect.origin(), view_size), bitmap_size,
+      base::BindOnce(&WebContents::OnCapturePageDone,
+                     weak_factory_.GetWeakPtr(), std::move(promise)));
   return handle;
 }
 
@@ -3192,21 +3198,17 @@ void WebContents::IncrementCapturerCount(gin::Arguments* args) {
   // get stayAwake arguments if they exist
   args->GetNext(&stay_awake);
 
-  std::ignore = web_contents()
-                    ->IncrementCapturerCount(size, stay_hidden, stay_awake)
-                    .Release();
+  base::ScopedClosureRunner capture_handle =
+      web_contents()->IncrementCapturerCount(size, stay_hidden, stay_awake);
+  capture_handles_.push(std::move(capture_handle));
 }
 
 void WebContents::DecrementCapturerCount(gin::Arguments* args) {
-  bool stay_hidden = false;
-  bool stay_awake = false;
-
-  // get stayHidden arguments if they exist
-  args->GetNext(&stay_hidden);
-  // get stayAwake arguments if they exist
-  args->GetNext(&stay_awake);
-
-  web_contents()->DecrementCapturerCount(stay_hidden, stay_awake);
+  if (!capture_handles_.empty()) {
+    base::ScopedClosureRunner handle = std::move(capture_handles_.front());
+    capture_handles_.pop();
+    handle.RunAndReset();
+  }
 }
 
 bool WebContents::IsBeingCaptured() {

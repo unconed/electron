@@ -7,6 +7,7 @@
 
 #include <map>
 #include <memory>
+#include <queue>
 #include <string>
 #include <utility>
 #include <vector>
@@ -211,6 +212,7 @@ class WebContents : public ExclusiveAccessContext,
   void SetDevToolsWebContents(const WebContents* devtools);
   v8::Local<v8::Value> GetNativeView(v8::Isolate* isolate) const;
   void IncrementCapturerCount(gin::Arguments* args);
+  // TODO(codebytere): deprecate stayHidden and stayAwake params.
   void DecrementCapturerCount(gin::Arguments* args);
   bool IsBeingCaptured();
   void HandleNewRenderFrame(content::RenderFrameHost* render_frame_host);
@@ -265,6 +267,9 @@ class WebContents : public ExclusiveAccessContext,
 
   // Dragging native items.
   void StartDrag(const gin_helper::Dictionary& item, gin::Arguments* args);
+
+  void OnCapturePageDone(gin_helper::Promise<gfx::Image> promise,
+                         const SkBitmap& bitmap);
 
   // Captures the page with |rect|, |callback| would be called when capturing is
   // done.
@@ -802,6 +807,8 @@ class WebContents : public ExclusiveAccessContext,
   DevToolsIndexingJobsMap devtools_indexing_jobs_;
 
   scoped_refptr<base::SequencedTaskRunner> file_task_runner_;
+
+  std::queue<base::ScopedClosureRunner> capture_handles_;
 
 #if BUILDFLAG(ENABLE_PRINTING)
   scoped_refptr<base::TaskRunner> print_task_runner_;
