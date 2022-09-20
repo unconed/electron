@@ -403,6 +403,27 @@ describe('BrowserView module', () => {
       expect(image.isEmpty()).to.equal(false);
     });
 
+    it('throws an error when incrementing during a capture session', async () => {
+      view = new BrowserView({
+        webPreferences: {
+          backgroundThrottling: false
+        }
+      });
+      w.setBrowserView(view);
+      view.setBounds({
+        ...w.getBounds(),
+        x: 0,
+        y: 0
+      });
+      await view.webContents.loadFile(path.join(fixtures, 'pages', 'a.html'));
+
+      expect(() => {
+        view.webContents.incrementCapturerCount();
+        view.webContents.capturePage();
+        view.webContents.incrementCapturerCount();
+      }).to.throw(/A capture session is already in progress./);
+    });
+
     it('should increase the capturer count', () => {
       view = new BrowserView({
         webPreferences: {

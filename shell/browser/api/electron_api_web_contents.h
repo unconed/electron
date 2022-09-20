@@ -808,7 +808,7 @@ class WebContents : public ExclusiveAccessContext,
 
   scoped_refptr<base::SequencedTaskRunner> file_task_runner_;
 
-  std::queue<base::ScopedClosureRunner> capture_handles_;
+  base::ScopedClosureRunner capture_handle_;
 
 #if BUILDFLAG(ENABLE_PRINTING)
   scoped_refptr<base::TaskRunner> print_task_runner_;

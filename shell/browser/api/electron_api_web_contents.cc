@@ -3131,11 +3131,7 @@ void WebContents::OnCapturePageDone(gin_helper::Promise<gfx::Image> promise,
                                     const SkBitmap& bitmap) {
   // Hack to enable transparency in captured image
   promise.Resolve(gfx::Image::CreateFrom1xBitmap(bitmap));
-  if (!capture_handles_.empty()) {
-    base::ScopedClosureRunner handle = std::move(capture_handles_.front());
-    capture_handles_.pop();
-    handle.RunAndReset();
-  }
+  capture_handle_.RunAndReset();
 }
 
 v8::Local<v8::Promise> WebContents::CapturePage(gin::Arguments* args) {
@@ -3198,17 +3194,18 @@ void WebContents::IncrementCapturerCount(gin::Arguments* args) {
   // get stayAwake arguments if they exist
   args->GetNext(&stay_awake);
 
-  base::ScopedClosureRunner capture_handle =
+  if (capture_handle_ || IsBeingCaptured()) {
+    gin_helper::ErrorThrower(args->isolate())
+        .ThrowError("A capture session is already in progress.");
+    return;
+  }
+
+  capture_handle_ =
       web_contents()->IncrementCapturerCount(size, stay_hidden, stay_awake);
-  capture_handles_.push(std::move(capture_handle));
 }
 
 void WebContents::DecrementCapturerCount(gin::Arguments* args) {
-  if (!capture_handles_.empty()) {
-    base::ScopedClosureRunner handle = std::move(capture_handles_.front());
-    capture_handles_.pop();
-    handle.RunAndReset();
-  }
+  capture_handle_.RunAndReset();
 }
 
 bool WebContents::IsBeingCaptured() {
