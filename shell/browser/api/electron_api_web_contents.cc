@@ -386,6 +386,14 @@ base::IDMap<WebContents*>& GetAllWebContents() {
   return *s_all_web_contents;
 }
 
+void OnCapturePageDone(gin_helper::Promise<gfx::Image> promise,
+                       base::ScopedClosureRunner capture_handle,
+                       const SkBitmap& bitmap) {
+  // Hack to enable transparency in captured image
+  promise.Resolve(gfx::Image::CreateFrom1xBitmap(bitmap));
+  capture_handle.RunAndReset();
+}
+
 absl::optional<base::TimeDelta> GetCursorBlinkInterval() {
 #if BUILDFLAG(IS_MAC)
   absl::optional<base::TimeDelta> system_value(
@@ -3127,20 +3135,17 @@ void WebContents::StartDrag(const gin_helper::Dictionary& item,
   }
 }
 
-void WebContents::OnCapturePageDone(gin_helper::Promise<gfx::Image> promise,
-                                    const SkBitmap& bitmap) {
-  // Hack to enable transparency in captured image
-  promise.Resolve(gfx::Image::CreateFrom1xBitmap(bitmap));
-  capture_handle_.RunAndReset();
-}
-
 v8::Local<v8::Promise> WebContents::CapturePage(gin::Arguments* args) {
   gfx::Rect rect;
+  bool stay_hidden = false;
+  bool stay_awake = false;
+
   gin_helper::Promise<gfx::Image> promise(args->isolate());
   v8::Local<v8::Promise> handle = promise.GetHandle();
 
-  // get rect arguments if they exist
   args->GetNext(&rect);
+  args->GetNext(&stay_hidden);
+  args->GetNext(&stay_awake);
 
   auto* const view = web_contents()->GetRenderWidgetHostView();
   if (!view) {
@@ -3160,6 +3165,9 @@ v8::Local<v8::Promise> WebContents::CapturePage(gin::Arguments* args) {
   }
 #endif  // BUILDFLAG(IS_MAC)
 
+  auto capture_handle = web_contents()->IncrementCapturerCount(
+      rect.size(), stay_hidden, stay_awake);
+
   // Capture full page if user doesn't specify a |rect|.
   const gfx::Size view_size =
       rect.IsEmpty() ? view->GetViewBounds().size() : rect.size();
@@ -3175,36 +3183,17 @@ v8::Local<v8::Promise> WebContents::CapturePage(gin::Arguments* args) {
   if (scale > 1.0f)
     bitmap_size = gfx::ScaleToCeiledSize(view_size, scale);
 
-  view->CopyFromSurface(
-      gfx::Rect(rect.origin(), view_size), bitmap_size,
-      base::BindOnce(&WebContents::OnCapturePageDone,
-                     weak_factory_.GetWeakPtr(), std::move(promise)));
+  view->CopyFromSurface(gfx::Rect(rect.origin(), view_size), bitmap_size,
+                        base::BindOnce(&OnCapturePageDone, std::move(promise),
+                                       std::move(capture_handle)));
   return handle;
 }
 
-void WebContents::IncrementCapturerCount(gin::Arguments* args) {
-  gfx::Size size;
-  bool stay_hidden = false;
-  bool stay_awake = false;
-
-  args->GetNext(&size);
-  args->GetNext(&stay_hidden);
-  args->GetNext(&stay_awake);
-
-  if (IsBeingCaptured()) {
-    gin_helper::ErrorThrower(args->isolate())
-        .ThrowError("A capture session is already in progress.");
-    return;
-  }
-
-  capture_handle_ =
-      web_contents()->IncrementCapturerCount(size, stay_hidden, stay_awake);
-}
+// TODO(codebytere): remove in Electron v23.
+void WebContents::IncrementCapturerCount(gin::Arguments* args) {}
 
 // TODO(codebytere): remove in Electron v22.
-void WebContents::DecrementCapturerCount(gin::Arguments* args) {
-  capture_handle_.RunAndReset();
-}
+void WebContents::DecrementCapturerCount(gin::Arguments* args) {}
 
 bool WebContents::IsBeingCaptured() {
   return web_contents()->IsBeingCaptured();

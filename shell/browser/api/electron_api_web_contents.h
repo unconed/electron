@@ -266,9 +266,6 @@ class WebContents : public ExclusiveAccessContext,
   // Dragging native items.
   void StartDrag(const gin_helper::Dictionary& item, gin::Arguments* args);
 
-  void OnCapturePageDone(gin_helper::Promise<gfx::Image> promise,
-                         const SkBitmap& bitmap);
-
   // Captures the page with |rect|, |callback| would be called when capturing is
   // done.
   v8::Local<v8::Promise> CapturePage(gin::Arguments* args);
@@ -805,8 +802,6 @@ class WebContents : public ExclusiveAccessContext,
   DevToolsIndexingJobsMap devtools_indexing_jobs_;
 
   scoped_refptr<base::SequencedTaskRunner> file_task_runner_;
-
-  base::ScopedClosureRunner capture_handle_;
 
 #if BUILDFLAG(ENABLE_PRINTING)
   scoped_refptr<base::TaskRunner> print_task_runner_;

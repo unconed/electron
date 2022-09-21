@@ -1764,19 +1764,6 @@ describe('BrowserWindow module', () => {
       expect(image.isEmpty()).to.equal(false);
     });
 
-    it('throws an error when incrementing during a capture session', async () => {
-      const w = new BrowserWindow({ show: false });
-      w.webContents.setBackgroundThrottling(false);
-      w.loadFile(path.join(fixtures, 'pages', 'a.html'));
-      await emittedOnce(w, 'ready-to-show');
-
-      expect(() => {
-        w.webContents.incrementCapturerCount();
-        w.capturePage();
-        w.webContents.incrementCapturerCount();
-      }).to.throw(/A capture session is already in progress./);
-    });
-
     it('preserves transparency', async () => {
       const w = new BrowserWindow({ show: false, transparent: true });
       w.loadFile(path.join(fixtures, 'pages', 'theme-color.html'));
@@ -1789,14 +1776,6 @@ describe('BrowserWindow module', () => {
       // Check the 25th byte in the PNG.
       // Values can be 0,2,3,4, or 6. We want 6, which is RGB + Alpha
       expect(imgBuffer[25]).to.equal(6);
-    });
-
-    it('should increase the capturer count', () => {
-      const w = new BrowserWindow({ show: false });
-      w.webContents.incrementCapturerCount();
-      expect(w.webContents.isBeingCaptured()).to.be.true();
-      w.webContents.decrementCapturerCount();
-      expect(w.webContents.isBeingCaptured()).to.be.false();
     });
   });
 
