@@ -19,7 +19,7 @@ This document uses the following convention to categorize breaking changes:
 The `new-window` event of WebContents has been removed. It is replaced by [`webContents.setWindowOpenHandler()`](api/web-contents.md#contentssetwindowopenhandlerhandler).
 
 ```js
-// Removed in Electron 21
+// Removed in Electron 22
 webContents.on('new-window', (event) => {
   event.preventDefault()
 })
@@ -27,6 +27,28 @@ webContents.on('new-window', (event) => {
 // Replace with
 webContents.setWindowOpenHandler((details) => {
   return { action: 'deny' }
+})
+```
+
+### Removed: `webContents.decrementCapturerCount(stayHidden, stayAwake)`
+
+The `webContents.decrementCapturerCount(stayHidden, stayAwake)` function has been removed.
+It is now automatically handled internally when a page capture completes.
+
+```js
+const w = new BrowserWindow({ show: false })
+
+// Removed in Electron 22
+w.webContents.incrementCapturerCount()
+w.capturePage().then(image => {
+  console.log(image.toDataURL())
+  w.webContents.decrementCapturerCount()
+})
+
+// Replace with
+w.webContents.incrementCapturerCount()
+w.capturePage().then(image => {
+  console.log(image.toDataURL())
 })
 ```
 

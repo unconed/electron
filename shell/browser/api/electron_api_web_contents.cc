@@ -3187,14 +3187,11 @@ void WebContents::IncrementCapturerCount(gin::Arguments* args) {
   bool stay_hidden = false;
   bool stay_awake = false;
 
-  // get size arguments if they exist
   args->GetNext(&size);
-  // get stayHidden arguments if they exist
   args->GetNext(&stay_hidden);
-  // get stayAwake arguments if they exist
   args->GetNext(&stay_awake);
 
-  if (capture_handle_ || IsBeingCaptured()) {
+  if (IsBeingCaptured()) {
     gin_helper::ErrorThrower(args->isolate())
         .ThrowError("A capture session is already in progress.");
     return;
@@ -3204,6 +3201,7 @@ void WebContents::IncrementCapturerCount(gin::Arguments* args) {
       web_contents()->IncrementCapturerCount(size, stay_hidden, stay_awake);
 }
 
+// TODO(codebytere): remove in Electron v22.
 void WebContents::DecrementCapturerCount(gin::Arguments* args) {
   capture_handle_.RunAndReset();
 }

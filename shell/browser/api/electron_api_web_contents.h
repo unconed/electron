@@ -211,7 +211,6 @@ class WebContents : public ExclusiveAccessContext,
   void SetDevToolsWebContents(const WebContents* devtools);
   v8::Local<v8::Value> GetNativeView(v8::Isolate* isolate) const;
   void IncrementCapturerCount(gin::Arguments* args);
-  // TODO(codebytere): deprecate stayHidden and stayAwake params.
   void DecrementCapturerCount(gin::Arguments* args);
   bool IsBeingCaptured();
   void HandleNewRenderFrame(content::RenderFrameHost* render_frame_host);

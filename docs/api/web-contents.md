@@ -1330,7 +1330,7 @@ hidden and the capturer count is non-zero. If you would like the page to stay hi
 
 This also affects the Page Visibility API.
 
-#### `contents.decrementCapturerCount([stayHidden, stayAwake])`
+#### `contents.decrementCapturerCount([stayHidden, stayAwake])` _Deprecated_
 
 * `stayHidden` boolean (optional) -  Keep the page in hidden state instead of visible.
 * `stayAwake` boolean (optional) -  Keep the system awake instead of allowing it to sleep.
@@ -1338,6 +1338,8 @@ This also affects the Page Visibility API.
 Decrease the capturer count by one. The page will be set to hidden or occluded state when its
 browser window is hidden or occluded and the capturer count reaches zero. If you want to
 decrease the hidden capturer count instead you should set `stayHidden` to true.
+
+**Deprecated:** This API's functionality is now handled automatically.
 
 #### `contents.getPrinters()` _Deprecated_
 
