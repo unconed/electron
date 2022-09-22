@@ -49,3 +49,4 @@ v8_api_advance_api_deprecation.patch
 enable_-wunqualified-std-cast-call.patch
 fixup_for_error_declaration_shadows_a_local_variable.patch
 fixup_for_wc_98-compat-extra-semi.patch
+src_avoid_using_v8_on_isolate_termination.patch

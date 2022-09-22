@@ -1,0 +1,111 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Santiago Gimeno <santiago.gimeno@gmail.com>
+Date: Wed, 21 Sep 2022 15:35:25 +0200
+Subject: src: avoid using v8 on Isolate termination
+
+Fix multiple instances of those uncovered while running the tests on
+debug builds.
+
+Fixes: https://github.com/nodejs/node-v8/issues/227
+PR-URL: https://github.com/nodejs/node/pull/44669
+Reviewed-By: Anna Henningsen <anna@addaleax.net>
+Reviewed-By: Darshan Sen <raisinten@gmail.com>
+Reviewed-By: Joyee Cheung <joyeec9h3@gmail.com>
+
+diff --git a/src/env.cc b/src/env.cc
+index cc44d578df9e146aa72f8273c1271d6a3c00d610..3e993aee4bc3847d06cee4e2cf5261a3bcd92149 100644
+--- a/src/env.cc
++++ b/src/env.cc
+@@ -162,14 +162,17 @@ bool AsyncHooks::pop_async_context(double async_id) {
+ }
+ 
+ void AsyncHooks::clear_async_id_stack() {
+-  Isolate* isolate = env()->isolate();
+-  HandleScope handle_scope(isolate);
+-  if (!js_execution_async_resources_.IsEmpty()) {
+-    USE(PersistentToLocal::Strong(js_execution_async_resources_)
+-            ->Set(env()->context(),
+-                  env()->length_string(),
+-                  Integer::NewFromUnsigned(isolate, 0)));
++  if (env()->can_call_into_js()) {
++    Isolate* isolate = env()->isolate();
++    HandleScope handle_scope(isolate);
++    if (!js_execution_async_resources_.IsEmpty()) {
++      USE(PersistentToLocal::Strong(js_execution_async_resources_)
++              ->Set(env()->context(),
++                    env()->length_string(),
++                    Integer::NewFromUnsigned(isolate, 0)));
++    }
+   }
++
+   native_execution_async_resources_.clear();
+   native_execution_async_resources_.shrink_to_fit();
+ 
+@@ -1153,7 +1156,13 @@ void Environment::RunAndClearNativeImmediates(bool only_refed) {
+   TRACE_EVENT0(TRACING_CATEGORY_NODE1(environment),
+                "RunAndClearNativeImmediates");
+   HandleScope handle_scope(isolate_);
+-  InternalCallbackScope cb_scope(this, Object::New(isolate_), { 0, 0 });
++  // In case the Isolate is no longer accessible just use an empty Local. This
++  // is not an issue for InternalCallbackScope as this case is already handled
++  // in its constructor but we avoid calls into v8 which can crash the process
++  // in debug builds.
++  Local<Object> obj =
++      can_call_into_js() ? Object::New(isolate_) : Local<Object>();
++  InternalCallbackScope cb_scope(this, obj, {0, 0});
+ 
+   size_t ref_count = 0;
+ 
+diff --git a/src/node_http2.cc b/src/node_http2.cc
+index c466fd8aecd6045841c2b39f707f747ee6f9fc6d..9bc7e8d19fc3832af8ff9208b6f95e5a10dd1689 100644
+--- a/src/node_http2.cc
++++ b/src/node_http2.cc
+@@ -1120,13 +1120,14 @@ int Http2Session::OnStreamClose(nghttp2_session* handle,
+   // It is possible for the stream close to occur before the stream is
+   // ever passed on to the javascript side. If that happens, the callback
+   // will return false.
+-  Local<Value> arg = Integer::NewFromUnsigned(isolate, code);
+-  MaybeLocal<Value> answer =
+-    stream->MakeCallback(env->http2session_on_stream_close_function(),
+-                          1, &arg);
+-  if (answer.IsEmpty() || answer.ToLocalChecked()->IsFalse()) {
+-    // Skip to destroy
+-    stream->Destroy();
++  if (env->can_call_into_js()) {
++    Local<Value> arg = Integer::NewFromUnsigned(isolate, code);
++    MaybeLocal<Value> answer = stream->MakeCallback(
++        env->http2session_on_stream_close_function(), 1, &arg);
++    if (answer.IsEmpty() || answer.ToLocalChecked()->IsFalse()) {
++      // Skip to destroy
++      stream->Destroy();
++    }
+   }
+   return 0;
+ }
+@@ -1629,9 +1630,11 @@ void Http2Session::MaybeScheduleWrite() {
+ 
+       // Sending data may call arbitrary JS code, so keep track of
+       // async context.
+-      HandleScope handle_scope(env->isolate());
+-      InternalCallbackScope callback_scope(this);
+-      SendPendingData();
++      if (env->can_call_into_js()) {
++        HandleScope handle_scope(env->isolate());
++        InternalCallbackScope callback_scope(this);
++        SendPendingData();
++      }
+     });
+   }
+ }
+diff --git a/src/node_platform.cc b/src/node_platform.cc
+index e10caa9f6e39ec5b255acd9bc6b7f8efc77221d9..c38f1a3bf1e3d9b5f9401e59e161a2416673ee09 100644
+--- a/src/node_platform.cc
++++ b/src/node_platform.cc
+@@ -405,6 +405,7 @@ int NodePlatform::NumberOfWorkerThreads() {
+ }
+ 
+ void PerIsolatePlatformData::RunForegroundTask(std::unique_ptr<Task> task) {
++  if (isolate_->IsExecutionTerminating()) return task->Run();
+   DebugSealHandleScope scope(isolate_);
+   Environment* env = Environment::GetCurrent(isolate_);
+   if (env != nullptr) {
